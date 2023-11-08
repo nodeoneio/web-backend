@@ -42,8 +42,7 @@ export const collect_producers = () => {
 
                         const d = await res.json();
 
-                        prod.candidate_name =
-                            d.org.candidate_name || d.org.owner;
+                        prod.candidate_name = d.org.candidate_name;
                         prod.location = d.org.location.name;
                         prod.country = d.org.location.country;
                         prod.logo_svg = d.org.branding.logo_svg;
@@ -54,6 +53,9 @@ export const collect_producers = () => {
                             prod.owner +
                                 ' => bp.json Error: '.concat(error.message)
                         );
+                        prod.candidate_name = prod.owner;
+                        console.log(prod);
+
                         return prod;
                     }
                 }
