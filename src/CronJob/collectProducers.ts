@@ -12,7 +12,7 @@ const fetchTimeout = (url: string, timeoutMs: number) => {
 };
 
 export const collect_producers = () => {
-    cron.schedule('*/55 * * * *', async () => {
+    cron.schedule('* */2 * * *', async () => {
         try {
             //Collect from getProducer API
             const requestOptions = {
