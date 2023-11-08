@@ -42,7 +42,8 @@ export const collect_producers = () => {
 
                         const d = await res.json();
 
-                        prod.candidate_name = d.org.candidate_name;
+                        prod.candidate_name =
+                            d.org.candidate_name || d.org.owner;
                         prod.location = d.org.location.name;
                         prod.country = d.org.location.country;
                         prod.logo_svg = d.org.branding.logo_svg;
