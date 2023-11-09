@@ -7,7 +7,7 @@ export async function fetchProducers({
     owner: owner,
     searchString = '',
     pageNumber = 1,
-    pageSize = 10,
+    pageSize = 30,
     sortBy = 'asc',
 }: fetchProducerParams) {
     try {
@@ -31,12 +31,12 @@ export async function fetchProducers({
             .skip(skipAmount)
             .limit(pageSize);
 
-        const totalUsersCount = await GetProducer.countDocuments(query);
+        const totalCount = await GetProducer.countDocuments(query);
         const producers = await producerQuery.exec();
 
-        const isNext = totalUsersCount > skipAmount + producers.length;
+        const isNext = totalCount > skipAmount + producers.length;
 
-        return { producers: producers, isNext };
+        return { producers, isNext, totalCount };
     } catch (error: any) {
         throw new Error(`${error.message}`);
     }

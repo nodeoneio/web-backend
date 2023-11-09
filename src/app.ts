@@ -12,12 +12,13 @@ app.get('/', (req, res) => {
     res.send('Hello World!');
 });
 
-app.get('/getproducers', async (req, res) => {
+app.get('/getproducers/:pagenum/:pagesize', async (req, res) => {
+
     const producers = await fetchProducers({
         owner: '',
         searchString: '',
-        pageNumber: 1,
-        pageSize: 10,
+        pageNumber: Number(req.params.pagenum),
+        pageSize: Number(req.params.pagesize),
         sortBy: 'asc',
     });
     res.type('json');

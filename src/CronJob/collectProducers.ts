@@ -13,13 +13,14 @@ const fetchTimeout = (url: string, timeoutMs: number) => {
 
 export const collect_producers = () => {
     cron.schedule('0 */6 * * *', async () => {
+    //cron.schedule('*/5 * * * * *', async () => {
         try {
             //Collect from getProducer API
             const requestOptions = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    limit: '7',
+                    limit: '200',
                     json: true,
                     //lower_bound: 'aus1genereos',
                 }),
