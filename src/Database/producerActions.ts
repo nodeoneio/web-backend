@@ -1,9 +1,11 @@
+import { getPositionOfLineAndCharacter } from 'typescript';
 import { fetchProducerParams, getProducerType } from '../types';
 import { connectToDB } from './db';
 import GetProducer from './producerModel';
-import { FilterQuery } from 'mongoose';
+//import { FilterQuery } from 'mongoose';
 
 export async function fetchProducers({
+    chainId,
     owner: owner,
     searchString = '',
     pageNumber = 1,
@@ -14,29 +16,64 @@ export async function fetchProducers({
         connectToDB();
 
         const skipAmount = (pageNumber - 1) * pageSize;
-        const regex = new RegExp(searchString, 'i');
 
-        const query: FilterQuery<typeof GetProducer> = {
-            id: { $ne: owner },
-        };
+        const result = await GetProducer.aggregate([
+            {
+                $match: { chainId: chainId },
+            },
+            {
+                $project: {
+                    _id: 0,
+                    chainId: 1,
+                    totalCount: {
+                        $size: '$info',
+                    },
+                    info: 1,
+                },
+            },
+            {
+                $project: {
+                    _id: 0,
+                    chainId: 1,
+                    totalCount: 1,
+                    info: {
+                        $slice: ['$info', skipAmount, pageSize],
+                    },
+                },
+            },
+            {
+                $project: {
+                    _id: 0,
+                    chainId: 1,
+                    totalCount: 1,
+                    info: {
+                        $sortArray: {
+                            input: '$info',
+                            sortBy: { rank: sortBy === 'asc' ? 1 : -1 },
+                        },
+                    },
+                },
+            },
+        ]);
 
-        if (searchString.trim() !== '') {
-            query.$or = [{ owner: { $regex: regex } }];
+        if (result.length === 0) {
+            return {
+                chainid: chainId,
+                producers: [],
+                isNext : false,
+                totalCount: 0,
+            };
         }
-
-        const sortOptions = { rank: sortBy };
-
-        const producerQuery = GetProducer.find(query)
-            .sort(sortOptions)
-            .skip(skipAmount)
-            .limit(pageSize);
-
-        const totalCount = await GetProducer.countDocuments(query);
-        const producers = await producerQuery.exec();
-
+        const totalCount = result[0].totalCount;
+        const producers = result[0].info;
         const isNext = totalCount > skipAmount + producers.length;
 
-        return { producers, isNext, totalCount };
+        return {
+            chainid: result[0].chainId,
+            producers: producers,
+            isNext,
+            totalCount: totalCount,
+        };
     } catch (error: any) {
         throw new Error(`${error.message}`);
     }
@@ -45,29 +82,11 @@ export async function fetchProducers({
 export async function upsertProducer(prods: getProducerType[]) {
     try {
         connectToDB();
-        for (const [index, prod] of prods.entries()) {
-            await GetProducer.findOneAndUpdate(
-                { owner: prod.owner },
-                {
-                    rank: index + 1,
-                    total_votes: prod.total_votes,
-                    producer_key: prod.producer_key,
-                    is_active: prod.is_active,
-                    url: prod.url,
-                    unpaid_blocks: prod.unpaid_blocks,
-                    last_claim_time: prod.last_claim_time,
-                    location_code: prod.location_code,
-                    candidate_name: prod.candidate_name,
-                    logo_svg: prod.logo_svg,
-                    location: prod.location,
-                    country: prod.country,
-                },
-                { upsert: true }
-            );
-            // await GetProducer.findByIdAndUpdate(prod.owner, {
-            //     $push: { blockexplorer: createdGetProducer._id },
-            // });
-        }
+
+        await GetProducer.deleteMany({});
+        await GetProducer.insertMany(prods);
+
+        console.log("BP Database Update Completed!")
     } catch (error: any) {
         throw new Error(`Error on Create Producers: ${error.message}`);
     }

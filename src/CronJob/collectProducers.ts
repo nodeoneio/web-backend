@@ -1,6 +1,59 @@
 import * as cron from 'node-cron';
 import { upsertProducer } from '../Database/producerActions';
-import { getProducerType } from '../types';
+import { bpInfoType, getProducerType } from '../types';
+import path from 'node:path';
+
+const cronStr = '0 */6 * * *';
+//const cronStr = '*/55 * * * * *';
+
+const apiEndpoints = [
+    {
+        name: 'EOS',
+        url: 'https://eos.eosusa.io',
+        chainId:
+            'aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906',
+    },
+    {
+        name: 'Jungle4',
+        url: 'https://api-jungle4.nodeone.network:8344',
+        chainId:
+            '73e4385a2708e6d7048834fbc1079f2fabb17b3c125b146af438971e90716c4d',
+    },
+    {
+        name: 'FIO',
+        url: 'https://api-fio.nodeone.network:8344',
+        chainId:
+            '21dcae42c0182200e93f954a074011f9048a7624c6fe81d3c9541a614a88bd1c',
+    },
+    {
+        name: 'Proton',
+        url: 'https://api-proton.nodeone.network:8344',
+        chainId:
+            '384da888112027f0321850a169f737c33e53b388aad48b5adace4bab97f437e0',
+    },
+    {
+        name: 'Libre',
+        url: 'https://api-libre.nodeone.network:8344',
+        chainId:
+            '38b1d7815474d0c60683ecbea321d723e83f5da6ae5f1c1f9fecc69d9ba96465',
+    },
+];
+
+const getProducers = async (endpoint: string) => {
+    const requestOptions = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            limit: '600',
+            json: true,
+        }),
+    };
+    const response = await fetch(
+        path.join(endpoint, 'v1', 'chain', 'get_producers'),
+        requestOptions
+    );
+    return await response.json();
+};
 
 const fetchTimeout = (url: string, timeoutMs: number) => {
     const controller = new AbortController();
@@ -11,62 +64,81 @@ const fetchTimeout = (url: string, timeoutMs: number) => {
     return promise.finally(() => clearTimeout(timeoutId));
 };
 
-export const collect_producers = () => {
-    cron.schedule('0 */6 * * *', async () => {
-    //cron.schedule('*/5 * * * * *', async () => {
-        try {
-            //Collect from getProducer API
-            const requestOptions = {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    limit: '200',
-                    json: true,
-                    //lower_bound: 'aus1genereos',
-                }),
-            };
-            const response = await fetch(
-                // 'https://api-jungle4.nodeone.network:8344/v1/chain/get_producers',
-                'https://eos.eosusa.io/v1/chain/get_producers',
-                requestOptions
-            );
-            const data = await response.json();
+const checkChainsJson = async (url: string, chainId: string) => {
+    // Chains.json 에서 체인에 맞는 BP.json 으로 확인, 없으면 BP.json 으로
+    try {
+        if (!url.startsWith('http')) return;
 
-            //  Get BP.json
-            const getBPResponse = data.rows.map(
-                async (prod: getProducerType) => {
-                    try {
-                        const res = await fetchTimeout(
-                            prod.url.concat('/bp.json'),
-                            2000
-                        );
+        const res = await fetchTimeout(path.join(url, 'chains.json'), 2000);
+        const chainsjson = await res.json();
 
-                        const d = await res.json();
+        return chainsjson.chains[chainId];
+    } catch (error) {
+        return;
+    }
+};
 
-                        prod.candidate_name = d.org.candidate_name;
-                        prod.location = d.org.location.name;
-                        prod.country = d.org.location.country;
-                        prod.logo_svg = d.org.branding.logo_svg;
-                        //console.log(prod);
-                        return prod;
-                    } catch (error: any) {
-                        console.log(
-                            prod.owner +
-                                ' => bp.json Error: '.concat(error.message)
-                        );
-                        prod.candidate_name = prod.owner;
-                        console.log(prod);
+const getBPInfo = async (data: any, chainId: string) => {
+    // const getBPResponse = data.producers.map(
+    const getBPResponse = data.rows.map(
+        async (prod: bpInfoType, index: number) => {
+            try {
+                let bpjson = await checkChainsJson(prod.url, chainId);
+                
+                // TODO: Chains.json 으로 다른 체인의 BP 정보 긁어오기
+                // Chains.json 에서 체인에 맞는 BP.json 으로 확인, 없으면 BP.json 으로
+                if (!bpjson) bpjson = 'bp.json';
+                const res = await fetchTimeout(
+                    path.join(prod.url, bpjson),
+                    2000
+                );
 
-                        return prod;
-                    }
-                }
-            );
+                const bpData = await res.json();
+                prod.rank = index + 1;
+                prod.candidate_name = bpData.org.candidate_name;
+                prod.location = bpData.org.location.name;
+                prod.country = bpData.org.location.country;
+                prod.logo_svg = bpData.org.branding.logo_svg;
 
-            const bpData = await Promise.all(getBPResponse);
-
-            upsertProducer(bpData);
-        } catch (error: any) {
-            console.error(error.message);
+                return prod;
+            } catch (error: any) {
+                // console.log(
+                //     prod.owner + ' => bp.json Error: '.concat(error.message)
+                // );
+                prod.rank = index + 1;
+                prod.candidate_name = prod.owner;
+                return prod;
+            }
         }
+    );
+
+    return (await Promise.all(getBPResponse)) as bpInfoType[];
+};
+
+export const collect_producers = () => {
+    cron.schedule(cronStr, async () => {
+        const data = apiEndpoints.map(async (endpoint) => {
+            try {
+                // Collect Producer Info
+                const data = await getProducers(endpoint.url);
+
+                // Fio 는 Producers 배열 키 값이 다름
+                if (endpoint.name === 'FIO') {
+                    data['rows'] = data['producers'];
+                    delete data['producers'];
+                }
+
+                //  Collect Producer's BP.json
+                const finalData = await getBPInfo(data, endpoint.chainId);
+                const result = { chainId: endpoint.chainId, info: finalData };
+                //console.log('Test: \n' + JSON.stringify(result));
+                return result;
+            } catch (error: any) {
+                console.error(error.message);
+            }
+        });
+        const returndata = (await Promise.all(data)) as getProducerType[];
+
+        upsertProducer(returndata);
     });
 };

@@ -9,12 +9,12 @@ collect_producers();
 
 app.get('/', (req, res) => {
     console.log(process.cwd());
-    res.send('Hello World!');
+    res.send('Hello This is NodeONE!');
 });
 
-app.get('/getproducers/:pagenum/:pagesize', async (req, res) => {
-
+app.get('/getproducers/:chainid/:pagenum/:pagesize', async (req, res) => {
     const producers = await fetchProducers({
+        chainId: String(req.params.chainid),
         owner: '',
         searchString: '',
         pageNumber: Number(req.params.pagenum),

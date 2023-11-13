@@ -11,6 +11,7 @@ export type UpdateProducerParams = {
 };
 
 export type fetchProducerParams = {
+    chainId:string;
     owner: string;
     searchString?: string;
     pageNumber?: number;
@@ -18,7 +19,7 @@ export type fetchProducerParams = {
     sortBy?: SortOrder;
 };
 
-export type getProducerType = {
+export type bpInfoType = {
     owner: string;
     rank: number;
     total_votes: string;
@@ -32,4 +33,9 @@ export type getProducerType = {
     logo_svg?: string;
     location?: string;
     country?: string;
+};
+
+export type getProducerType = {
+    chainId: string;
+    info: bpInfoType[];
 };
