@@ -15,6 +15,7 @@ const getProducerSchema = new mongoose.Schema({
             location_code: Number,
             candidate_name: String,
             logo_svg: String,
+            logo_png: String,
             location: String,
             country: String,
         },

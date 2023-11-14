@@ -13,7 +13,7 @@ export async function fetchProducers({
     sortBy = 'asc',
 }: fetchProducerParams) {
     try {
-        connectToDB();
+        await connectToDB();
 
         const skipAmount = (pageNumber - 1) * pageSize;
 
@@ -81,7 +81,7 @@ export async function fetchProducers({
 
 export async function upsertProducer(prods: getProducerType[]) {
     try {
-        connectToDB();
+        await connectToDB();
 
         await GetProducer.deleteMany({});
         await GetProducer.insertMany(prods);

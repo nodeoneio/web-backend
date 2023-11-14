@@ -1,14 +1,14 @@
 import { SortOrder } from 'mongoose';
 
-export type UpdateProducerParams = {
-    account: string;
-    name: string;
-    rank: number;
-    imageURL: string;
-    location: string;
-    website: string;
-    totalVotes: number;
-};
+// export type UpdateProducerParams = {
+//     account: string;
+//     name: string;
+//     rank: number;
+//     imageURL: string;
+//     location: string;
+//     website: string;
+//     totalVotes: number;
+// };
 
 export type fetchProducerParams = {
     chainId:string;
@@ -30,6 +30,7 @@ export type bpInfoType = {
     last_claim_time: string;
     location_code: number;
     candidate_name?: string;
+    logo_png?: string;
     logo_svg?: string;
     location?: string;
     country?: string;

@@ -44,7 +44,7 @@ const getProducers = async (endpoint: string) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            limit: '600',
+            limit: '1000',
             json: true,
         }),
     };
@@ -69,7 +69,7 @@ const checkChainsJson = async (url: string, chainId: string) => {
     try {
         if (!url.startsWith('http')) return;
 
-        const res = await fetchTimeout(path.join(url, 'chains.json'), 2000);
+        const res = await fetchTimeout(path.join(url, 'chains.json'), 5000);
         const chainsjson = await res.json();
 
         return chainsjson.chains[chainId];
@@ -79,18 +79,26 @@ const checkChainsJson = async (url: string, chainId: string) => {
 };
 
 const getBPInfo = async (data: any, chainId: string) => {
-    // const getBPResponse = data.producers.map(
-    const getBPResponse = data.rows.map(
-        async (prod: bpInfoType, index: number) => {
+    const getBPResponse = data
+        .filter((prod: bpInfoType) => {
+            if (
+                prod.producer_key ===
+                'EOS1111111111111111111111111111111114T1Anm'
+            )
+                return false;
+
+            return true;
+        })
+        .map(async (prod: bpInfoType, index: number) => {
             try {
                 let bpjson = await checkChainsJson(prod.url, chainId);
-                
+
                 // TODO: Chains.json 으로 다른 체인의 BP 정보 긁어오기
                 // Chains.json 에서 체인에 맞는 BP.json 으로 확인, 없으면 BP.json 으로
                 if (!bpjson) bpjson = 'bp.json';
                 const res = await fetchTimeout(
                     path.join(prod.url, bpjson),
-                    2000
+                    5000
                 );
 
                 const bpData = await res.json();
@@ -99,6 +107,7 @@ const getBPInfo = async (data: any, chainId: string) => {
                 prod.location = bpData.org.location.name;
                 prod.country = bpData.org.location.country;
                 prod.logo_svg = bpData.org.branding.logo_svg;
+                prod.logo_png = bpData.org.branding.logo_256;
 
                 return prod;
             } catch (error: any) {
@@ -109,14 +118,15 @@ const getBPInfo = async (data: any, chainId: string) => {
                 prod.candidate_name = prod.owner;
                 return prod;
             }
-        }
-    );
+        });
 
     return (await Promise.all(getBPResponse)) as bpInfoType[];
 };
 
-export const collect_producers = () => {
+export const collect_producers = async () => {
     cron.schedule(cronStr, async () => {
+        console.log('Collecting BP Data...');
+
         const data = apiEndpoints.map(async (endpoint) => {
             try {
                 // Collect Producer Info
@@ -129,7 +139,7 @@ export const collect_producers = () => {
                 }
 
                 //  Collect Producer's BP.json
-                const finalData = await getBPInfo(data, endpoint.chainId);
+                const finalData = await getBPInfo(data.rows, endpoint.chainId);
                 const result = { chainId: endpoint.chainId, info: finalData };
                 //console.log('Test: \n' + JSON.stringify(result));
                 return result;
