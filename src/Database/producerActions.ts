@@ -2,6 +2,7 @@ import { getPositionOfLineAndCharacter } from 'typescript';
 import { fetchProducerParams, getProducerType } from '../types';
 import { connectToDB } from './db';
 import GetProducer from './producerModel';
+import IsoCountryCode from './isoCodeModel';
 //import { FilterQuery } from 'mongoose';
 
 export async function fetchProducers({
@@ -60,7 +61,7 @@ export async function fetchProducers({
             return {
                 chainid: chainId,
                 producers: [],
-                isNext : false,
+                isNext: false,
                 totalCount: 0,
             };
         }
@@ -86,8 +87,18 @@ export async function upsertProducer(prods: getProducerType[]) {
         await GetProducer.deleteMany({});
         await GetProducer.insertMany(prods);
 
-        console.log("BP Database Update Completed!")
+        console.log('BP Database Update Completed!');
     } catch (error: any) {
         throw new Error(`Error on Create Producers: ${error.message}`);
+    }
+}
+
+export async function fetchLocation() {
+    try {
+        await connectToDB();
+
+        return await IsoCountryCode.find({});
+    } catch (error: any) {
+        throw new Error(`Error on fetch location: ${error.message}`);
     }
 }

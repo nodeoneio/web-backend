@@ -1,18 +1,20 @@
 import * as cron from 'node-cron';
-import { upsertProducer } from '../Database/producerActions';
+import { fetchLocation, upsertProducer } from '../Database/producerActions';
 import { bpInfoType, getProducerType } from '../types';
 import path from 'node:path';
+import { connectToDB } from '../Database/db';
+import IsoCountryCode from '../Database/isoCodeModel';
 
-const cronStr = '0 */6 * * *';
+const cronStr = '0 */12 * * *';
 //const cronStr = '*/55 * * * * *';
 
 const apiEndpoints = [
-    {
-        name: 'EOS',
-        url: 'https://eos.eosusa.io',
-        chainId:
-            'aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906',
-    },
+    // {
+    //     name: 'EOS',
+    //     url: 'https://eos.eosusa.io',
+    //     chainId:
+    //         'aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906',
+    // },
     {
         name: 'Jungle4',
         url: 'https://api-jungle4.nodeone.network:8344',
@@ -67,8 +69,6 @@ const fetchTimeout = (url: string, timeoutMs: number) => {
 const checkChainsJson = async (url: string, chainId: string) => {
     // Chains.json 에서 체인에 맞는 BP.json 으로 확인, 없으면 BP.json 으로
     try {
-        if (!url.startsWith('http')) return;
-
         const res = await fetchTimeout(path.join(url, 'chains.json'), 5000);
         const chainsjson = await res.json();
 
@@ -78,7 +78,7 @@ const checkChainsJson = async (url: string, chainId: string) => {
     }
 };
 
-const getBPInfo = async (data: any, chainId: string) => {
+const getBPInfo = async (data: any, chainId: string, locations: any[]) => {
     const getBPResponse = data
         .filter((prod: bpInfoType) => {
             if (
@@ -91,6 +91,12 @@ const getBPInfo = async (data: any, chainId: string) => {
         })
         .map(async (prod: bpInfoType, index: number) => {
             try {
+                if (
+                    !prod.url ||
+                    prod.url === '' ||
+                    !prod.url.startsWith('http')
+                )
+                    throw new Error('No BP Webpage');
                 let bpjson = await checkChainsJson(prod.url, chainId);
 
                 // TODO: Chains.json 으로 다른 체인의 BP 정보 긁어오기
@@ -104,8 +110,10 @@ const getBPInfo = async (data: any, chainId: string) => {
                 const bpData = await res.json();
                 prod.rank = index + 1;
                 prod.candidate_name = bpData.org.candidate_name;
-                prod.location = bpData.org.location.name;
-                prod.country = bpData.org.location.country;
+                prod.location = [
+                    bpData.org.location.name,
+                    bpData.org.location.country,
+                ].join(', ');
                 prod.logo_svg = bpData.org.branding.logo_svg;
                 prod.logo_png = bpData.org.branding.logo_256;
 
@@ -114,6 +122,18 @@ const getBPInfo = async (data: any, chainId: string) => {
                 // console.log(
                 //     prod.owner + ' => bp.json Error: '.concat(error.message)
                 // );
+
+                if (prod.location === '0') {
+                    prod.location = 'Unknown';
+                } else {
+                    locations.forEach((loc) => {
+                        prod.location =
+                            loc['country-code'] === prod.location
+                                ? loc['name']
+                                : 'Unknown';
+                    });
+                }
+
                 prod.rank = index + 1;
                 prod.candidate_name = prod.owner;
                 return prod;
@@ -127,6 +147,8 @@ export const collect_producers = async () => {
     cron.schedule(cronStr, async () => {
         console.log('Collecting BP Data...');
 
+        const locations = await fetchLocation();
+
         const data = apiEndpoints.map(async (endpoint) => {
             try {
                 // Collect Producer Info
@@ -139,7 +161,11 @@ export const collect_producers = async () => {
                 }
 
                 //  Collect Producer's BP.json
-                const finalData = await getBPInfo(data.rows, endpoint.chainId);
+                const finalData = await getBPInfo(
+                    data.rows,
+                    endpoint.chainId,
+                    locations
+                );
                 const result = { chainId: endpoint.chainId, info: finalData };
                 //console.log('Test: \n' + JSON.stringify(result));
                 return result;
@@ -148,7 +174,7 @@ export const collect_producers = async () => {
             }
         });
         const returndata = (await Promise.all(data)) as getProducerType[];
-
+        // console.log(returndata);
         upsertProducer(returndata);
     });
 };

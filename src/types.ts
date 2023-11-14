@@ -33,7 +33,7 @@ export type bpInfoType = {
     logo_png?: string;
     logo_svg?: string;
     location?: string;
-    country?: string;
+    // country?: string;
 };
 
 export type getProducerType = {
