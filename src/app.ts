@@ -5,7 +5,7 @@ import { fetchProducers } from './Database/producerActions';
 const app = express();
 const port = 8888;
 
-global.process.setMaxListeners(50);
+global.process.setMaxListeners(200);
 
 collect_producers();
 

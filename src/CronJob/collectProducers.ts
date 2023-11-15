@@ -2,19 +2,11 @@ import * as cron from 'node-cron';
 import { fetchLocation, upsertProducer } from '../Database/producerActions';
 import { bpInfoType, getProducerType } from '../types';
 import path from 'node:path';
-import { connectToDB } from '../Database/db';
-import IsoCountryCode from '../Database/isoCodeModel';
 
 const cronStr = '0 */12 * * *';
 //const cronStr = '*/55 * * * * *';
 
 const apiEndpoints = [
-    // {
-    //     name: 'EOS',
-    //     url: 'https://eos.eosusa.io',
-    //     chainId:
-    //         'aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906',
-    // },
     {
         name: 'Jungle4',
         url: 'https://api-jungle4.nodeone.network:8344',
@@ -38,6 +30,12 @@ const apiEndpoints = [
         url: 'https://api-libre.nodeone.network:8344',
         chainId:
             '38b1d7815474d0c60683ecbea321d723e83f5da6ae5f1c1f9fecc69d9ba96465',
+    },
+    {
+        name: 'EOS',
+        url: 'https://eos.eosusa.io',
+        chainId:
+            'aca376f206b8fc25a6ed44dbdc66547c36c6c33e3a119ffbeaef943642f0e906',
     },
 ];
 
@@ -78,6 +76,14 @@ const checkChainsJson = async (url: string, chainId: string) => {
     }
 };
 
+const sleep = (sec: number) => {
+    let start = Date.now(),
+        now = start;
+    while (now - start < sec * 1000) {
+        now = Date.now();
+    }
+};
+
 const getBPInfo = async (data: any, chainId: string, locations: any[]) => {
     const getBPResponse = data
         .filter((prod: bpInfoType) => {
@@ -106,10 +112,11 @@ const getBPInfo = async (data: any, chainId: string, locations: any[]) => {
                     path.join(prod.url, bpjson),
                     5000
                 );
-
                 const bpData = await res.json();
+                // console.log(bpData.org.candidate_name);
+
                 prod.rank = index + 1;
-                prod.candidate_name = bpData.org.candidate_name;
+                prod.candidate_name = bpData.org.candidate_name ? bpData.org.candidate_name : prod.owner;
                 prod.location = [
                     bpData.org.location.name,
                     bpData.org.location.country,
@@ -133,8 +140,8 @@ const getBPInfo = async (data: any, chainId: string, locations: any[]) => {
                                 : 'Unknown';
                     });
                 }
-
                 prod.rank = index + 1;
+                prod.url = prod.url.startsWith('http') ? prod.url : '';
                 prod.candidate_name = prod.owner;
                 return prod;
             }
@@ -151,6 +158,8 @@ export const collect_producers = async () => {
 
         const data = apiEndpoints.map(async (endpoint) => {
             try {
+                sleep(5);
+                console.log('Collecting ' + endpoint.name);
                 // Collect Producer Info
                 const data = await getProducers(endpoint.url);
 
@@ -174,7 +183,7 @@ export const collect_producers = async () => {
             }
         });
         const returndata = (await Promise.all(data)) as getProducerType[];
-        // console.log(returndata);
+
         upsertProducer(returndata);
     });
 };
