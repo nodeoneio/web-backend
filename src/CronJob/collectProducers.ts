@@ -96,6 +96,14 @@ const sleep = (sec: number) => {
     }
 };
 
+const getFlagEmoji = (countryCode: string) => {
+    const codePoints = countryCode
+        .toUpperCase()
+        .split('')
+        .map((char) => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+};
+
 const getBPInfo = async (
     data: bpInfoType[],
     chainId: string,
@@ -117,7 +125,7 @@ const getBPInfo = async (
                 (item) => item['country-code'] == bpInfo.location
             );
             bpInfo.location = locName
-                ? locName.name
+                ? getFlagEmoji(locName['alpha-2']) + ' ' + locName.name
                 : `Unknown(${bpInfo.location})`;
             try {
                 if (
@@ -195,6 +203,8 @@ export const collect_producers = async () => {
                     endpoint.chainId,
                     isoLocationInfo
                 );
+                console.log(bpInfo);
+
                 getProducerResult['rows'] = bpInfo;
                 getProducerResult.chainId = endpoint.chainId;
 
