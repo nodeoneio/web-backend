@@ -1,9 +1,14 @@
 import * as cron from 'node-cron';
 import { fetchLocation, upsertProducer } from '../Database/producerActions';
-import { bpInfoType, getProducerType } from '../types';
+import {
+    IsoCountryCodeType,
+    bpInfoType,
+    bpJsonType,
+    getProducerType,
+} from '../types';
 import path from 'node:path';
 
-const cronStr = '0 */12 * * *';
+const cronStr = '0 0 * * *';
 //const cronStr = '*/55 * * * * *';
 
 const apiEndpoints = [
@@ -39,7 +44,7 @@ const apiEndpoints = [
     },
 ];
 
-const getProducers = async (endpoint: string) => {
+const getProducers = async (name: string, endpoint: string) => {
     const requestOptions = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -52,7 +57,14 @@ const getProducers = async (endpoint: string) => {
         path.join(endpoint, 'v1', 'chain', 'get_producers'),
         requestOptions
     );
-    return await response.json();
+    const result = await response.json();
+
+    // Fio 는 Producers 배열의 키 값이 다름
+    if (name.toUpperCase() === 'FIO') {
+        result['rows'] = result['producers'];
+        delete result['producers'];
+    }
+    return result as getProducerType;
 };
 
 const fetchTimeout = (url: string, timeoutMs: number) => {
@@ -64,7 +76,7 @@ const fetchTimeout = (url: string, timeoutMs: number) => {
     return promise.finally(() => clearTimeout(timeoutId));
 };
 
-const checkChainsJson = async (url: string, chainId: string) => {
+const getBPjsonPathFromChainsJson = async (url: string, chainId: string) => {
     // Chains.json 에서 체인에 맞는 BP.json 으로 확인, 없으면 BP.json 으로
     try {
         const res = await fetchTimeout(path.join(url, 'chains.json'), 5000);
@@ -72,7 +84,7 @@ const checkChainsJson = async (url: string, chainId: string) => {
 
         return chainsjson.chains[chainId];
     } catch (error) {
-        return;
+        return 'bp.json';
     }
 };
 
@@ -84,66 +96,78 @@ const sleep = (sec: number) => {
     }
 };
 
-const getBPInfo = async (data: any, chainId: string, locations: any[]) => {
+const getBPInfo = async (
+    data: bpInfoType[],
+    chainId: string,
+    isoLocationInfo: IsoCountryCodeType[]
+) => {
     const getBPResponse = data
-        .filter((prod: bpInfoType) => {
+        .filter((bpInfo: bpInfoType) => {
             if (
-                prod.producer_key ===
+                bpInfo.producer_key ===
                 'EOS1111111111111111111111111111111114T1Anm'
             )
                 return false;
 
             return true;
         })
-        .map(async (prod: bpInfoType, index: number) => {
+        .map(async (bpInfo: bpInfoType, index: number) => {
+            bpInfo.rank = index + 1;
+            const locName = isoLocationInfo.find(
+                (item) => item['country-code'] == bpInfo.location
+            );
+            bpInfo.location = locName
+                ? locName.name
+                : `Unknown(${bpInfo.location})`;
             try {
                 if (
-                    !prod.url ||
-                    prod.url === '' ||
-                    !prod.url.startsWith('http')
+                    !bpInfo.url ||
+                    bpInfo.url === '' ||
+                    !bpInfo.url.startsWith('http') ||
+                    bpInfo.owner === 'dposclubprod' // invalid BP.json(https://about.dpos.club/bp.json)
                 )
-                    throw new Error('No BP Webpage');
-                let bpjson = await checkChainsJson(prod.url, chainId);
+                    throw new Error('No BP info or invalid webpage');
 
-                // TODO: Chains.json 으로 다른 체인의 BP 정보 긁어오기
-                // Chains.json 에서 체인에 맞는 BP.json 으로 확인, 없으면 BP.json 으로
-                if (!bpjson) bpjson = 'bp.json';
+                let bpJsonPath = await getBPjsonPathFromChainsJson(
+                    bpInfo.url,
+                    chainId
+                );
                 const res = await fetchTimeout(
-                    path.join(prod.url, bpjson),
+                    path.join(bpInfo.url, bpJsonPath),
                     5000
                 );
-                const bpData = await res.json();
-                // console.log(bpData.org.candidate_name);
+                const bpData = (await res.json()) as bpJsonType;
+                // console.log(bpData);
 
-                prod.rank = index + 1;
-                prod.candidate_name = bpData.org.candidate_name ? bpData.org.candidate_name : prod.owner;
-                prod.location = [
-                    bpData.org.location.name,
-                    bpData.org.location.country,
-                ].join(', ');
-                prod.logo_svg = bpData.org.branding.logo_svg;
-                prod.logo_png = bpData.org.branding.logo_256;
+                bpInfo.bp_json = bpData;
+                // prod.candidate_name = bpData.org.candidate_name
+                //     ? bpData.org.candidate_name
+                //     : prod.owner;
+                // prod.location = [
+                //     bpData.org.location.name,
+                //     bpData.org.location.country,
+                // ].join(', ');
 
-                return prod;
+                return bpInfo;
             } catch (error: any) {
                 // console.log(
                 //     prod.owner + ' => bp.json Error: '.concat(error.message)
                 // );
 
-                if (prod.location === '0') {
-                    prod.location = 'Unknown';
-                } else {
-                    locations.forEach((loc) => {
-                        prod.location =
-                            loc['country-code'] === prod.location
-                                ? loc['name']
-                                : 'Unknown';
-                    });
-                }
-                prod.rank = index + 1;
-                prod.url = prod.url.startsWith('http') ? prod.url : '';
-                prod.candidate_name = prod.owner;
-                return prod;
+                // if (prod.location === '0') {
+                //     prod.location = 'Unknown';
+                // } else {
+                //     locations.forEach((loc) => {
+                //         prod.location =
+                //             loc['country-code'] === prod.location
+                //                 ? loc['name']
+                //                 : 'Unknown';
+                //     });
+                // }
+
+                bpInfo.url = bpInfo.url.startsWith('http') ? bpInfo.url : '';
+                // prod.candidate_name = prod.owner;
+                return bpInfo;
             }
         });
 
@@ -151,39 +175,35 @@ const getBPInfo = async (data: any, chainId: string, locations: any[]) => {
 };
 
 export const collect_producers = async () => {
+    const isoLocationInfo: IsoCountryCodeType[] = await fetchLocation();
+
     cron.schedule(cronStr, async () => {
         console.log('Collecting BP Data...');
 
-        const locations = await fetchLocation();
-
         const data = apiEndpoints.map(async (endpoint) => {
             try {
-                sleep(5);
                 console.log('Collecting ' + endpoint.name);
-                // Collect Producer Info
-                const data = await getProducers(endpoint.url);
-
-                // Fio 는 Producers 배열 키 값이 다름
-                if (endpoint.name === 'FIO') {
-                    data['rows'] = data['producers'];
-                    delete data['producers'];
-                }
-
-                //  Collect Producer's BP.json
-                const finalData = await getBPInfo(
-                    data.rows,
-                    endpoint.chainId,
-                    locations
+                sleep(5);
+                // Collect a chain's Producer array
+                const getProducerResult = await getProducers(
+                    endpoint.name,
+                    endpoint.url
                 );
-                const result = { chainId: endpoint.chainId, info: finalData };
-                //console.log('Test: \n' + JSON.stringify(result));
-                return result;
+                //  Collect Producer's BP.json
+                const bpInfo = await getBPInfo(
+                    getProducerResult.rows,
+                    endpoint.chainId,
+                    isoLocationInfo
+                );
+                getProducerResult['rows'] = bpInfo;
+                getProducerResult.chainId = endpoint.chainId;
+
+                return getProducerResult as getProducerType;
             } catch (error: any) {
                 console.error(error.message);
             }
         });
-        const returndata = (await Promise.all(data)) as getProducerType[];
-
-        upsertProducer(returndata);
+        const res = (await Promise.all(data)) as getProducerType[];
+        upsertProducer(res);
     });
 };

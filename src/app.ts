@@ -14,11 +14,11 @@ app.get('/', (req, res) => {
     res.send('Hello This is NodeONE!');
 });
 
-app.get('/getproducers/:chainid/:pagenum/:pagesize', async (req, res) => {
+app.get('/getproducers/:chainid/:pagenum/:pagesize/:searchstring?', async (req, res) => {
     const producers = await fetchProducers({
         chainId: String(req.params.chainid),
         owner: '',
-        searchString: '',
+        searchString: String(req.params.searchstring),
         pageNumber: Number(req.params.pagenum),
         pageSize: Number(req.params.pagesize),
         sortBy: 'asc',

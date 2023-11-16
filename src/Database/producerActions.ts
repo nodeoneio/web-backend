@@ -1,9 +1,7 @@
-import { getPositionOfLineAndCharacter } from 'typescript';
 import { fetchProducerParams, getProducerType } from '../types';
 import { connectToDB } from './db';
-import GetProducer from './producerModel';
+import Producer from './producerModel';
 import IsoCountryCode from './isoCodeModel';
-//import { FilterQuery } from 'mongoose';
 
 export async function fetchProducers({
     chainId,
@@ -18,7 +16,7 @@ export async function fetchProducers({
 
         const skipAmount = (pageNumber - 1) * pageSize;
 
-        const result = await GetProducer.aggregate([
+        const result = await Producer.aggregate([
             {
                 $match: { chainId: chainId },
             },
@@ -27,9 +25,9 @@ export async function fetchProducers({
                     _id: 0,
                     chainId: 1,
                     totalCount: {
-                        $size: '$info',
+                        $size: '$rows',
                     },
-                    info: 1,
+                    rows: 1,
                 },
             },
             {
@@ -37,8 +35,8 @@ export async function fetchProducers({
                     _id: 0,
                     chainId: 1,
                     totalCount: 1,
-                    info: {
-                        $slice: ['$info', skipAmount, pageSize],
+                    rows: {
+                        $slice: ['$rows', skipAmount, pageSize],
                     },
                 },
             },
@@ -47,9 +45,9 @@ export async function fetchProducers({
                     _id: 0,
                     chainId: 1,
                     totalCount: 1,
-                    info: {
+                    rows: {
                         $sortArray: {
-                            input: '$info',
+                            input: '$rows',
                             sortBy: { rank: sortBy === 'asc' ? 1 : -1 },
                         },
                     },
@@ -66,7 +64,7 @@ export async function fetchProducers({
             };
         }
         const totalCount = result[0].totalCount;
-        const producers = result[0].info;
+        const producers = result[0].rows;
         const isNext = totalCount > skipAmount + producers.length;
 
         return {
@@ -84,8 +82,8 @@ export async function upsertProducer(prods: getProducerType[]) {
     try {
         await connectToDB();
 
-        await GetProducer.deleteMany({});
-        await GetProducer.insertMany(prods);
+        await Producer.deleteMany({});
+        await Producer.insertMany(prods);
 
         console.log('BP Database Update Completed!');
     } catch (error: any) {
