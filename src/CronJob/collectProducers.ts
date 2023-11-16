@@ -203,7 +203,7 @@ export const collect_producers = async () => {
                     endpoint.chainId,
                     isoLocationInfo
                 );
-                console.log(bpInfo);
+                // console.log(bpInfo);
 
                 getProducerResult['rows'] = bpInfo;
                 getProducerResult.chainId = endpoint.chainId;
