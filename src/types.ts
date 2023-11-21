@@ -8,11 +8,6 @@ export type fetchProducerParams = {
     pageSize?: number;
     sortBy?: SortOrder;
 };
-export type getProducerType = {
-    chainId: string;
-    total_producer_vote_weight: string;
-    rows: bpInfoType[];
-};
 
 export type bpInfoType = {
     owner: string;
@@ -24,6 +19,7 @@ export type bpInfoType = {
     unpaid_blocks: number;
     last_claim_time: string;
     location: string;
+    location_info: string;
     bp_json: bpJsonType;
 };
 
@@ -69,10 +65,4 @@ export type bpJsonType = {
             ssl_endpoint: string;
         }
     ];
-};
-
-export type IsoCountryCodeType = {
-    'country-code': string;
-    name: string;
-    'alpha-2': string;
 };

@@ -1,7 +1,6 @@
-import { fetchProducerParams, getProducerType } from '../types';
+import { fetchProducerParams } from '../types';
 import { connectToDB } from './db';
 import Producer from './producerModel';
-import IsoCountryCode from './isoCodeModel';
 
 export async function fetchProducers({
     chainId,
@@ -28,6 +27,7 @@ export async function fetchProducers({
                         $size: '$rows',
                     },
                     rows: 1,
+                    total_producer_vote_weight: 1,
                 },
             },
             {
@@ -38,6 +38,7 @@ export async function fetchProducers({
                     rows: {
                         $slice: ['$rows', skipAmount, pageSize],
                     },
+                    total_producer_vote_weight: 1,
                 },
             },
             {
@@ -51,6 +52,7 @@ export async function fetchProducers({
                             sortBy: { rank: sortBy === 'asc' ? 1 : -1 },
                         },
                     },
+                    total_producer_vote_weight: 1,
                 },
             },
         ]);
@@ -61,6 +63,7 @@ export async function fetchProducers({
                 producers: [],
                 isNext: false,
                 totalCount: 0,
+                total_producer_vote_weight: 0,
             };
         }
         const totalCount = result[0].totalCount;
@@ -72,31 +75,9 @@ export async function fetchProducers({
             producers: producers,
             isNext,
             totalCount: totalCount,
+            total_producer_vote_weight: result[0].total_producer_vote_weight,
         };
     } catch (error: any) {
         throw new Error(`${error.message}`);
-    }
-}
-
-export async function upsertProducer(prods: getProducerType[]) {
-    try {
-        await connectToDB();
-
-        await Producer.deleteMany({});
-        await Producer.insertMany(prods);
-
-        console.log('BP Database Update Completed!');
-    } catch (error: any) {
-        throw new Error(`Error on Create Producers: ${error.message}`);
-    }
-}
-
-export async function fetchLocation() {
-    try {
-        await connectToDB();
-
-        return await IsoCountryCode.find({});
-    } catch (error: any) {
-        throw new Error(`Error on fetch location: ${error.message}`);
     }
 }

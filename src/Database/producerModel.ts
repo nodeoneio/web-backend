@@ -57,6 +57,7 @@ const ProducerSchema = new mongoose.Schema({
             unpaid_blocks: Number,
             last_claim_time: String,
             location: String,
+            location_info: String,
             bp_json: [BPJsonSchema],
         },
     ],
